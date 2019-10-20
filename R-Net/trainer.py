@@ -1,3 +1,5 @@
+import time
+
 import torch.nn as nn
 import torch
 import torch.optim as optim
@@ -5,9 +7,9 @@ from torch.utils.data import DataLoader
 import ujson as json
 import os
 
-from .dataset import MyDataset
-from .model import RNET
-from .util import convert_tokens, evaluate
+from dataset import MyDataset
+from model import RNET
+from util import convert_tokens, evaluate
 
 
 class Trainer(object):
@@ -16,9 +18,11 @@ class Trainer(object):
         self.config = config
         self.logger = logger
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.model = RNET(self.config, word_mat=word_mat, char_mat=char_mat)
+        self.model = RNET(self.config, self.device, word_mat=word_mat, char_mat=char_mat)
+        # 多gpu并行的时候，一个batch的数据会均分到每块gpu上，因此batch_size = batch_size*gpu数
         if torch.cuda.device_count() > 1:
-            print("Let's use", torch.cuda.device_count(), "GPUs")
+            self.device_count = torch.cuda.device_count()
+            print("Let's use", self.device_count, "GPUs")
             self.model = nn.DataParallel(self.model, device_ids=[0, 1, 2, 3])
 
         self.load_parameters()
@@ -34,21 +38,26 @@ class Trainer(object):
 
     def train(self):
         self.logger.info('load data...')
+        start_time = time.time()
         # 加载数据化数据
         dev_loader = DataLoader(dataset=MyDataset(self.config.dev_data_file, self.digital_keys),
-                                batch_size=self.config.batch_size)
+                                batch_size=self.config.val_num_batches * self.device_count)
         train_loader = DataLoader(dataset=MyDataset(self.config.train_data_file, self.digital_keys),
-                                  batch_size=self.config.val_num_batches,
+                                  batch_size=self.config.batch_size * self.device_count,
                                   shuffle=True)
         # 加载原始数据
         with open(self.config.dev_eval_file, "r") as fh:
             dev_eval_file = json.load(fh)
+
+        time_diff = time.time() - start_time
+        self.logger.info("time consumed: %dm%ds." % (time_diff // 60, time_diff % 60))
 
         save_model = self.config.save_dir + 'RNET_'
 
         self.logger.info('start train model...')
         self.model.train()
         for epoch in range(1, self.config.num_steps + 1):
+            start_time = time.time()
             self.logger.info('Epoch {}/{}'.format(epoch, self.config.num_steps))
             for batch in train_loader:
                 context_idxs = batch[0].to(self.device)
@@ -62,6 +71,8 @@ class Trainer(object):
                 loss = self.calc_loss(logits1, logits2, y1, y2)
                 loss.backward()
                 self.optimizer.step()
+            time_diff = time.time() - start_time
+            self.logger.info("epoch %d time consumed: %dm%ds." % (epoch + 1, time_diff // 60, time_diff % 60))
 
             self.logger.info('evaluate model...')
             if epoch % self.config.checkpoint == 0:
@@ -118,6 +129,7 @@ class Trainer(object):
         self.logger.info('testing model...')
         answer_save_file = open(self.config.answer_file, 'w', encoding='utf-8')
 
+        self.model.is_train = False
         self.model.eval()
         for batch in test_loader:
             logits1, logits2 = self.model(batch[0], batch[1], batch[2], batch[3])

@@ -2,8 +2,8 @@ import json
 import logging
 
 import torch
-from .config import get_parser
-from .trainer import Trainer
+from config import get_parser
+from trainer import Trainer
 
 
 def main():

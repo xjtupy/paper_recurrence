@@ -5,7 +5,7 @@ import ujson as json
 from collections import Counter
 import numpy as np
 import os.path
-from .config import get_parser
+from config import get_parser
 
 nlp = spacy.blank("en")
 

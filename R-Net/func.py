@@ -13,20 +13,19 @@ class GRU(nn.Module):
         self.num_layers = num_layers
         self.dropout = nn.Dropout(dropout)
         self.is_train = is_train
-        # batch_first=True使得维度为[batch_size, seq_length, dim]
+        # batch_first=True使得维度为[batch_size, seq_length, dim]，否则为[seq_length, batch_size, dim]
         self.gru = nn.GRU(input_size, hidden_size, num_layers, batch_first=True, bidirectional=is_bidirectional)
         self.num_directions = 2 if is_bidirectional else 1  # 2表示双向
 
     def forward(self, x):
         # 初始化隐状态
-        h0 = torch.zeros(self.num_layers * self.num_directions, x.size(0), self.hidden_size)
+        h0 = torch.zeros(self.num_layers * self.num_directions, x.size(0), self.hidden_size).cuda()
 
         x = self.dropout(x) if self.is_train else x
-        # out：[batch_size, seq_length, hidden_size*num_directions]
+        # out：最后一层每个time-step的输出[batch_size, seq_length, hidden_size*num_directions]
         # h_n：保存每一层最后一个时间步隐状态：[batch, num_layers * num_directions, hidden_size]
         out, h_n = self.gru(x, h0)
 
-        # 返回最后一层每个time-step的输出
         return out, h_n
 
 

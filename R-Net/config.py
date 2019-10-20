@@ -1,5 +1,6 @@
 import argparse
 import os
+import torch
 
 
 def get_parser():
@@ -21,8 +22,6 @@ def get_parser():
     dev_eval = os.path.join(target_dir, "dev_eval.json")
     test_data = os.path.join(target_dir, "test_data.json")
     test_eval = os.path.join(target_dir, "test_eval.json")
-    dev_meta = os.path.join(target_dir, "dev_meta.json")
-    test_meta = os.path.join(target_dir, "test_meta.json")
     word2idx_file = os.path.join(target_dir, "word2idx.json")
     char2idx_file = os.path.join(target_dir, "char2idx.json")
     answer_file = os.path.join(answer_dir, "answer.txt")
@@ -95,3 +94,17 @@ def get_parser():
     parser.add_argument("-fasttext", type=bool, default=False, help="Whether to use fasttext")
 
     return parser
+
+
+if __name__ == '__main__':
+    import json
+    import torch
+
+    parser = get_parser()
+    config = parser.parse_args()
+
+    with open(config.char_emb_file, "r") as fh:
+        char_mat = torch.tensor(json.load(fh))
+
+    print(char_mat)
+    print(char_mat.size())
