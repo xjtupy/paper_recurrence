@@ -82,8 +82,8 @@ class Embedding(nn.Module):
         N, PL, QL, CL, dc, dg = c.size(
             0), c_maxlen, q_maxlen, self.config.char_limit, self.config.char_dim, self.config.char_hidden
         # 字符嵌入
-        ch_emb = self.char_mat(ch).view([N * PL, CL, dc])
-        qh_emb = self.char_mat(qh).view([N * QL, CL, dc])
+        ch_emb = self.char_mat(ch.long()).view([N * PL, CL, dc])
+        qh_emb = self.char_mat(qh.long()).view([N * QL, CL, dc])
         ch_emb = self.dropout(ch_emb) if self.is_train else ch_emb
         qh_emb = self.dropout(qh_emb) if self.is_train else qh_emb
         # 双向rnn最后一个隐状态表示每个词
@@ -94,8 +94,8 @@ class Embedding(nn.Module):
         qh_emb = qh_emb.view([N, QL, 2 * dg])
 
         # 词嵌入
-        c_emb = self.word_mat(c)  # [N, PL, 300]
-        q_emb = self.word_mat(q)  # [N, QL, 300]
+        c_emb = self.word_mat(c.long())  # [N, PL, 300]
+        q_emb = self.word_mat(q.long())  # [N, QL, 300]
 
         # 连接每个词的词嵌入和字符嵌入，获得新的嵌入表示
         c_emb = torch.cat([c_emb, ch_emb], dim=2)  # [N, PL, 300+2*dg]
@@ -167,7 +167,7 @@ class AnswerOutput(nn.Module):
         self.pointer = None
 
     def forward(self, q, match, c_mask, q_mask):
-        init = self.init_state(q[:, :, -2 * self.config.hidden], self.config.hidden, q_mask)
+        init = self.init_state(q[:, :, -2 * self.config.hidden:], self.config.hidden, q_mask)
         self.pointer = PtrNet(match.size(-1), init.size(-1), self.config.ptr_drop_prob, is_train=self.is_train)
         # 开始和结束位置概率分布：[N, PL]
         logits1, logits2 = self.pointer(init, match, c_mask)

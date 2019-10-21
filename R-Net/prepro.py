@@ -1,7 +1,7 @@
 import random
 from tqdm import tqdm
 import spacy
-import ujson as json
+import json
 from collections import Counter
 import numpy as np
 import os.path
@@ -74,6 +74,9 @@ def process_file(filename, data_type, word_counter, char_counter):
                     examples.append(example)
                     eval_examples[str(total)] = {"context": context, "spans": spans, "answers": answer_texts,
                                                  "uuid": qa["id"]}
+
+                break
+
         random.shuffle(examples)
         print("{} questions in total".format(len(examples)))
     return examples, eval_examples
@@ -235,10 +238,8 @@ def prepro(config):
     save(config.dev_data_file, dev_data, message="dev data")
     save(config.test_eval_file, test_eval, message="test eval")
     save(config.test_data_file, test_data, message="test data")
-    save(config.dev_meta, dev_meta, message="dev meta")
     save(config.word2idx_file, word2idx_dict, message="word2idx")
     save(config.char2idx_file, char2idx_dict, message="char2idx")
-    save(config.test_meta, test_meta, message="test meta")
 
 
 if __name__ == '__main__':

@@ -1,7 +1,5 @@
 import argparse
 import os
-import torch
-
 
 def get_parser():
     home = os.path.expanduser("~")
@@ -94,17 +92,3 @@ def get_parser():
     parser.add_argument("-fasttext", type=bool, default=False, help="Whether to use fasttext")
 
     return parser
-
-
-if __name__ == '__main__':
-    import json
-    import torch
-
-    parser = get_parser()
-    config = parser.parse_args()
-
-    with open(config.char_emb_file, "r") as fh:
-        char_mat = torch.tensor(json.load(fh))
-
-    print(char_mat)
-    print(char_mat.size())

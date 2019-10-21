@@ -26,8 +26,8 @@ class MyDataset(Dataset):
 if __name__ == '__main__':
     keys = ["context_idxs", 'ques_idxs', 'context_char_idxs', 'ques_char_idxs', 'y1', 'y2', 'id']
     dataset = MyDataset('data/dev_data.json', keys)
-    dataLoader = DataLoader(dataset=dataset, batch_size=2, shuffle=True)
+
+    dataLoader = DataLoader(dataset=dataset, batch_size=64, shuffle=True)
     for i, data in enumerate(dataLoader):
-        print(data[2])
         print(data[2].size())
         break

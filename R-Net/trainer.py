@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
-import ujson as json
+import json
 import os
 
 from dataset import MyDataset
@@ -18,15 +18,14 @@ class Trainer(object):
         self.config = config
         self.logger = logger
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.model = RNET(self.config, self.device, word_mat=word_mat, char_mat=char_mat)
+        self.model = RNET(self.config, self.device, word_mat=word_mat, char_mat=char_mat).to(self.device)
         # 多gpu并行的时候，一个batch的数据会均分到每块gpu上，因此batch_size = batch_size*gpu数
-        # if torch.cuda.device_count() > 1:
-        #     self.device_count = torch.cuda.device_count()
-        #     print("Let's use", self.device_count, "GPUs")
-        #     self.model = nn.DataParallel(self.model, device_ids=[0, 1, 2, 3])
+        if torch.cuda.device_count() > 1:
+            self.device_count = torch.cuda.device_count()
+            print("Let's use", self.device_count, "GPUs")
+            self.model = nn.DataParallel(self.model, device_ids=[0, 1, 2, 3])
 
         self.load_parameters()
-        self.model.to(self.device)
         self.optimizer = optim.Adadelta(self.model.parameters(), lr=config.init_lr, rho=0.95, eps=1e-6)
 
         self.loss_save = 100
@@ -40,11 +39,6 @@ class Trainer(object):
         self.logger.info('load data...')
         start_time = time.time()
         # 加载数据化数据
-        # dev_loader = DataLoader(dataset=MyDataset(self.config.dev_data_file, self.digital_keys),
-        #                         batch_size=self.config.val_num_batches * self.device_count)
-        # train_loader = DataLoader(dataset=MyDataset(self.config.train_data_file, self.digital_keys),
-        #                           batch_size=self.config.batch_size * self.device_count,
-        #                           shuffle=True)
         dev_loader = DataLoader(dataset=MyDataset(self.config.dev_data_file, self.digital_keys),
                                 batch_size=self.config.val_num_batches)
         train_loader = DataLoader(dataset=MyDataset(self.config.train_data_file, self.digital_keys),
@@ -153,9 +147,14 @@ class Trainer(object):
         self.logger.info('test exact_match：{}，f1：{}，loss：{}'.format(metrics['exact_match'], metrics['f1'], loss))
 
     def calc_loss(self, logits1, logits2, y1, y2):
-        cross_entropy = nn.CrossEntropyLoss(reduction='mean')
-        loss1 = cross_entropy(logits1, y1).to(self.device)
-        loss2 = cross_entropy(logits2, y2).to(self.device)
+        c_maxlen = logits1.size(-1)
+        y1 = y1[:, :c_maxlen].argmax(dim=1)
+        y2 = y2[:, :c_maxlen].argmax(dim=1)
+
+        # 负对数似然
+        loss = nn.NLLLoss(reduction='sum')
+        loss1 = loss(logits1, y1.long()).to(self.device)
+        loss2 = loss(logits2, y2.long()).to(self.device)
         return loss1 + loss2
 
     def adjust_lr(optimizer, epoch):

@@ -19,7 +19,7 @@ class GRU(nn.Module):
 
     def forward(self, x):
         # 初始化隐状态
-        h0 = torch.zeros(self.num_layers * self.num_directions, x.size(0), self.hidden_size).cuda()
+        h0 = torch.zeros(self.num_layers * self.num_directions, x.size(0), self.hidden_size)
 
         x = self.dropout(x) if self.is_train else x
         # out：最后一层每个time-step的输出[batch_size, seq_length, hidden_size*num_directions]
@@ -84,9 +84,8 @@ class Dense(nn.Module):
 
 
 class PtrNet(nn.Module):
-
     def __init__(self, input_size, hidden_size, dropout=0.3, is_train=None):
-        super(PtrNet).__init__()
+        super(PtrNet, self).__init__()
         self.hidden_size = hidden_size
         self.dropout = nn.Dropout(dropout)
         self.is_train = is_train
@@ -103,11 +102,11 @@ class PtrNet(nn.Module):
         # 在经过一个时间步预测结束位置
         _, state = self.gru(d_inp)
         # 只取最后一层的输出
-        last_state = state[:, -1, :]
-        d_state = self.dropout(last_state) if self.is_train else last_state
+        state = self.dropout(state) if self.is_train else state
+        state = state.squeeze(0)
         # 结束位置概率分布
         # logits2：[N, PL]
-        _, logits2 = self.pointer(d_match, d_state, c_mask)
+        _, logits2 = self.pointer(d_match, state, c_mask)
 
         return logits1, logits2
 
@@ -128,8 +127,7 @@ class Pointer(nn.Module):
         s = self.dense(s0, 1).squeeze(2)  # [N, PL]
         s1 = -INF * (1 - c_mask.float()) + s
         a = F.softmax(s1, dim=-1).unsqueeze(dim=2)  # [N, PL, 1]
-        res = torch.matmul(inputs, a).sum(dim=1)  # [N, 1800]
-
+        res = torch.mul(inputs, a).sum(dim=1).unsqueeze(dim=1)  # [N, 1800]
         return res, s1
 
 
@@ -149,5 +147,5 @@ class InitState(nn.Module):
         s = self.dense(s0, 1).squeeze(2)  # [N, QL]
         s1 = -INF * (1 - mask.float()) + s
         a = F.softmax(s1, dim=-1).unsqueeze(dim=2)  # [N, QL, 1]
-        res = torch.matmul(memory, a).sum(dim=1)  # [N, 300]
+        res = torch.mul(memory, a).sum(dim=1)  # [N, 300]
         return res
