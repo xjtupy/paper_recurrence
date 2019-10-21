@@ -20,10 +20,10 @@ class Trainer(object):
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.model = RNET(self.config, self.device, word_mat=word_mat, char_mat=char_mat)
         # 多gpu并行的时候，一个batch的数据会均分到每块gpu上，因此batch_size = batch_size*gpu数
-        if torch.cuda.device_count() > 1:
-            self.device_count = torch.cuda.device_count()
-            print("Let's use", self.device_count, "GPUs")
-            self.model = nn.DataParallel(self.model, device_ids=[0, 1, 2, 3])
+        # if torch.cuda.device_count() > 1:
+        #     self.device_count = torch.cuda.device_count()
+        #     print("Let's use", self.device_count, "GPUs")
+        #     self.model = nn.DataParallel(self.model, device_ids=[0, 1, 2, 3])
 
         self.load_parameters()
         self.model.to(self.device)
@@ -40,10 +40,15 @@ class Trainer(object):
         self.logger.info('load data...')
         start_time = time.time()
         # 加载数据化数据
+        # dev_loader = DataLoader(dataset=MyDataset(self.config.dev_data_file, self.digital_keys),
+        #                         batch_size=self.config.val_num_batches * self.device_count)
+        # train_loader = DataLoader(dataset=MyDataset(self.config.train_data_file, self.digital_keys),
+        #                           batch_size=self.config.batch_size * self.device_count,
+        #                           shuffle=True)
         dev_loader = DataLoader(dataset=MyDataset(self.config.dev_data_file, self.digital_keys),
-                                batch_size=self.config.val_num_batches * self.device_count)
+                                batch_size=self.config.val_num_batches)
         train_loader = DataLoader(dataset=MyDataset(self.config.train_data_file, self.digital_keys),
-                                  batch_size=self.config.batch_size * self.device_count,
+                                  batch_size=self.config.batch_size,
                                   shuffle=True)
         # 加载原始数据
         with open(self.config.dev_eval_file, "r") as fh:
