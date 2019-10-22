@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch
-import torch.nn.functional as F
 from func import GRU, DotAttention, InitState, PtrNet
 
 
@@ -156,12 +155,14 @@ class AnswerOutput(nn.Module):
         self.is_train = is_train
         self.init_state = InitState(config.hidden, config.ptr_drop_prob, is_train)
         self.pointer = PtrNet(75, 150, config.ptr_drop_prob, is_train=is_train)
+        self.logSoftmax = nn.LogSoftmax(dim=1)
 
     def forward(self, q, match, c_mask, q_mask):
         init = self.init_state(q[:, :, -2 * self.config.hidden:], q_mask)
         # 开始和结束位置概率分布：[N, PL]
         logits1, logits2 = self.pointer(init, match, c_mask)
-        logits1 = F.softmax(logits1, dim=1)
-        logits2 = F.softmax(logits2, dim=1)
+        # 先softmax,在取对数，用于负对数似然损失函数
+        logits1 = self.logSoftmax(logits1)
+        logits2 = self.logSoftmax(logits2)
 
         return logits1, logits2
