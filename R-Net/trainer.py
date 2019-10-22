@@ -18,12 +18,13 @@ class Trainer(object):
         self.config = config
         self.logger = logger
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.model = RNET(self.config, self.device, word_mat=word_mat, char_mat=char_mat).to(self.device)
+        self.model = RNET(self.config, word_mat=word_mat, char_mat=char_mat).to(self.device)
         # 多gpu并行的时候，一个batch的数据会均分到每块gpu上，因此batch_size = batch_size*gpu数
-        # if torch.cuda.device_count() > 1:
-        #     self.device_count = torch.cuda.device_count()
-        #     print("Let's use", self.device_count, "GPUs")
-        #     self.model = nn.DataParallel(self.model, device_ids=[0, 1, 2, 3])
+        self.device_count = 1
+        if torch.cuda.device_count() > 1:
+            self.device_count = torch.cuda.device_count()
+            print("Let's use", self.device_count, "GPUs")
+            self.model = nn.DataParallel(self.model, device_ids=[0, 1, 2, 3])
 
         self.load_parameters()
         self.optimizer = optim.Adadelta(self.model.parameters(), lr=config.init_lr, rho=0.95, eps=1e-6)
@@ -39,18 +40,12 @@ class Trainer(object):
         self.logger.info('load data...')
         start_time = time.time()
         # 加载数据化数据
-        # 多gpu
-        # dev_loader = DataLoader(dataset=MyDataset(self.config.dev_data_file, self.digital_keys),
-        #                         batch_size=self.config.val_num_batches*self.device_count)
-        # train_loader = DataLoader(dataset=MyDataset(self.config.train_data_file, self.digital_keys),
-        #                           batch_size=self.config.batch_size*self.device_count,
-        #                           shuffle=True)
-
         dev_loader = DataLoader(dataset=MyDataset(self.config.dev_data_file, self.digital_keys),
-                                batch_size=self.config.val_num_batches)
+                                batch_size=self.config.val_num_batches * self.device_count)
         train_loader = DataLoader(dataset=MyDataset(self.config.train_data_file, self.digital_keys),
-                                  batch_size=self.config.batch_size,
+                                  batch_size=self.config.batch_size * self.device_count,
                                   shuffle=True)
+
         # 加载原始数据
         with open(self.config.dev_eval_file, "r") as fh:
             dev_eval_file = json.load(fh)
@@ -64,7 +59,6 @@ class Trainer(object):
         self.model.train()
         for epoch in range(1, self.config.num_steps + 1):
             start_time = time.time()
-            self.logger.info('Epoch {}/{}'.format(epoch, self.config.num_steps))
             for batch in train_loader:
                 context_idxs = batch[0].to(self.device)
                 ques_idxs = batch[1].to(self.device)
@@ -78,9 +72,10 @@ class Trainer(object):
                 loss.backward()
                 self.optimizer.step()
             time_diff = time.time() - start_time
-            self.logger.info("epoch %d time consumed: %dm%ds." % (epoch + 1, time_diff // 60, time_diff % 60))
+            self.logger.info(
+                "Epoch：%d/%d,loss：%0.3f，time：%dm%ds." % (
+                epoch, self.config.num_steps, loss, time_diff // 60, time_diff % 60))
 
-            self.logger.info('evaluate model...')
             if epoch % self.config.checkpoint == 0:
                 metrics = self.eval_dev(dev_loader, dev_eval_file)
                 if metrics['loss'] < self.loss_save:
@@ -95,6 +90,7 @@ class Trainer(object):
                     self.loss_save = metrics['loss']
                     self.patience = 0
 
+                self.logger.info('evaluate model...')
                 self.logger.info(
                     'current exact_match：{}，f1：{}，loss：{}'.format(metrics['exact_match'], metrics['f1'],
                                                                   metrics['loss']))
