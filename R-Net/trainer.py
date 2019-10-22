@@ -155,7 +155,7 @@ class Trainer(object):
         y2 = y2[:, :c_maxlen].argmax(dim=1)
 
         # 负对数似然
-        loss = nn.NLLLoss(reduction='sum')
+        loss = nn.NLLLoss()
         loss1 = loss(logits1, y1.long()).to(self.device)
         loss2 = loss(logits2, y2.long()).to(self.device)
         return loss1 + loss2

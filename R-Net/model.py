@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+import torch.nn.functional as F
 from func import GRU, DotAttention, InitState, PtrNet
 
 
@@ -160,5 +161,7 @@ class AnswerOutput(nn.Module):
         init = self.init_state(q[:, :, -2 * self.config.hidden:], q_mask)
         # 开始和结束位置概率分布：[N, PL]
         logits1, logits2 = self.pointer(init, match, c_mask)
+        logits1 = F.softmax(logits1, dim=1)
+        logits2 = F.softmax(logits2, dim=1)
 
         return logits1, logits2
