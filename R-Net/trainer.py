@@ -53,7 +53,7 @@ class Trainer(object):
         time_diff = time.time() - start_time
         self.logger.info("time consumed: %dm%ds." % (time_diff // 60, time_diff % 60))
 
-        save_model = self.config.save_dir + 'RNET_'
+        save_model = self.config.save_dir + '/RNET_'
 
         self.logger.info('start train model...')
         self.model.train()
@@ -74,10 +74,11 @@ class Trainer(object):
             time_diff = time.time() - start_time
             self.logger.info(
                 "Epoch：%d/%d,loss：%0.3f，time：%dm%ds." % (
-                epoch, self.config.num_steps, loss, time_diff // 60, time_diff % 60))
+                    epoch, self.config.num_steps, loss, time_diff // 60, time_diff % 60))
 
             if epoch % self.config.checkpoint == 0:
                 metrics = self.eval_dev(dev_loader, dev_eval_file)
+                self.model.train()
                 if metrics['loss'] < self.loss_save:
                     self.loss_save = metrics['loss']
                     self.patience = 0
@@ -95,7 +96,7 @@ class Trainer(object):
                     'current exact_match：{}，f1：{}，loss：{}'.format(metrics['exact_match'], metrics['f1'],
                                                                   metrics['loss']))
                 if metrics['exact_match'] > self.eval_best_acc:
-                    save_filename = save_model + str(metrics['exact_match'])
+                    save_filename = save_model + "%.2f" % metrics['exact_match']
                     # save model parameters
                     torch.save(self.model.state_dict(), save_filename)
                     self.eval_best_acc = metrics['exact_match']
@@ -109,9 +110,9 @@ class Trainer(object):
                                           batch[3].to(self.device))
             loss = self.calc_loss(logits1, logits2, batch[4].to(self.device), batch[5].to(self.device))
             # 开始位置
-            p1 = logits1.argmax(dim=1)[0]
+            p1 = logits1.argmax(dim=1)
             # 结束位置
-            p2 = logits2.argmax(dim=1)[0]
+            p2 = logits2.argmax(dim=1)
             answer_dict_, _ = convert_tokens(dev_eval_file, batch[6].to(self.device).tolist(), p1.tolist(), p2.tolist())
             answer_dict.update(answer_dict_)
             losses.append(loss)
@@ -122,7 +123,8 @@ class Trainer(object):
 
     def test(self):
         # 加载数据化数据
-        test_loader = DataLoader(dataset=MyDataset(self.config.test_data_file, self.digital_keys))
+        test_loader = DataLoader(dataset=MyDataset(self.config.test_data_file, self.digital_keys),
+                                 batch_size=self.config.val_num_batches * self.device_count)
         # 加载原始数据
         with open(self.config.test_eval_file, "r") as fh:
             test_eval_file = json.load(fh)
@@ -134,13 +136,15 @@ class Trainer(object):
         self.model.is_train = False
         self.model.eval()
         for batch in test_loader:
-            logits1, logits2 = self.model(batch[0], batch[1], batch[2], batch[3])
-            loss = self.calc_loss(logits1, logits2, batch[4], batch[5])
+            logits1, logits2 = self.model(batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device),
+                                          batch[3].to(self.device))
+            loss = self.calc_loss(logits1, logits2, batch[4].to(self.device), batch[5].to(self.device))
             # 开始位置
-            p1 = logits1.argmax(dim=1)[0]
+            p1 = logits1.argmax(dim=1)
             # 结束位置
-            p2 = logits2.argmax(dim=1)[0]
-            answer_dict_, remapped_dict = convert_tokens(test_eval_file, batch[6].tolist(), p1.tolist(), p2.tolist())
+            p2 = logits2.argmax(dim=1)
+            answer_dict_, remapped_dict = convert_tokens(test_eval_file, batch[6].to(self.device).tolist(), p1.tolist(),
+                                                         p2.tolist())
             answer_dict.update(answer_dict_)
             uuid = test_eval_file[str(batch[6].tolist()[0])]["uuid"]
             # save answer
@@ -156,9 +160,8 @@ class Trainer(object):
 
         # 负对数似然
         loss = nn.NLLLoss()
-        loss1 = loss(logits1, y1.long()).to(self.device)
-        loss2 = loss(logits2, y2.long()).to(self.device)
-        print(loss1 + loss2)
+        loss1 = loss(logits1, y1).to(self.device)
+        loss2 = loss(logits2, y2).to(self.device)
         return loss1 + loss2
 
     def adjust_lr(optimizer, epoch):

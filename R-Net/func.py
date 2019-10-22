@@ -78,7 +78,7 @@ class Dense(nn.Module):
         shape = inputs.size()  # [N, maxlen, dim]
         out_shape = [shape[i] for i in range(len(shape) - 1)] + [self.hidden]  # [N, maxlen, hidden]
 
-        flat_inputs = inputs.view([-1, shape[-1]])  # [N*maxlen, dim]
+        flat_inputs = inputs.contiguous().view([-1, shape[-1]])  # [N*maxlen, dim]
         res = self.w(flat_inputs).view(out_shape)  # [N, maxlen, hidden]
         return res
 
@@ -123,7 +123,7 @@ class Pointer(nn.Module):
         # hidden：75
         # c_mask：[N, PL]
         u = torch.cat([state.unsqueeze(dim=1).repeat([1, inputs.size(1), 1]), inputs], dim=2)
-        s0 = F.tanh(self.s0_dense(u))  # [N, PL, hidden]
+        s0 = torch.tanh(self.s0_dense(u))  # [N, PL, hidden]
         s = self.s1_dense(s0).squeeze(2)  # [N, PL]
         s1 = -INF * (1 - c_mask.float()) + s
         a = F.softmax(s1, dim=-1).unsqueeze(dim=2)  # [N, PL, 1]
@@ -144,7 +144,7 @@ class InitState(nn.Module):
         # q_mask：[N, QL]
         # hidden：75
         d_memory = self.dropout(memory) if self.is_train else memory  # [N, QL, 150]
-        s0 = F.tanh(self.s0_dense(d_memory))  # [N, QL, hidden]
+        s0 = torch.tanh(self.s0_dense(d_memory))  # [N, QL, hidden]
         s = self.s1_dense(s0).squeeze(2)  # [N, QL]
         s1 = -INF * (1 - mask.float()) + s
         a = F.softmax(s1, dim=-1).unsqueeze(dim=2)  # [N, QL, 1]
